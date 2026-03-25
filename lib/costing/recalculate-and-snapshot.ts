@@ -1,45 +1,95 @@
 import { prisma } from '@/lib/prisma'
-import { calculateLotCosts } from './calculate-lot-costs'
+import { calculateImportCosts } from './calculate-lot-costs'
 
-export async function recalculateAndSnapshot(importLotId: string, reason: string) {
-  const lot = await prisma.importLot.findUnique({
-    where: { id: importLotId },
+async function getImportCostView(importId: string) {
+  return prisma.import.findUnique({
+    where: { id: importId },
     include: {
-      expenses: true,
-      production: true,
-      costSnapshots: { orderBy: { version: 'desc' }, take: 1 },
+      items: { include: { production: true } },
+      expenses: { include: { allocations: true } },
+      snapshots: { orderBy: { version: 'desc' }, take: 1 },
     },
   })
+}
 
-  if (!lot || !lot.production) return
+export async function recalculateAndSnapshot(importId: string, reason: string) {
+  const importData = await getImportCostView(importId)
+  if (!importData) return
 
-  const result = calculateLotCosts({
-    invoiceValueUsd: Number(lot.invoiceValueUsd),
-    freightUsd: Number(lot.freightUsd),
-    expenses: lot.expenses.map((e) => ({ amountUsd: Number(e.amountUsd) })),
-    producedUnits: lot.production.producedUnits,
-    defectiveUnits: lot.production.defectiveUnits,
-  })
+  await prisma.$transaction(async (tx) => {
+    const current = await tx.import.findUnique({
+      where: { id: importId },
+      include: {
+        items: { include: { production: true } },
+        expenses: { include: { allocations: true } },
+        snapshots: { orderBy: { version: 'desc' }, take: 1 },
+      },
+    })
 
-  const currentVersion = lot.costSnapshots[0]?.version ?? 0
+    if (!current) return
+    const result = calculateImportCosts(current)
 
-  await prisma.importLot.update({
-    where: { id: importLotId },
-    data: { importTotalUsd: result.importTotalUsd }
-  })
+    await tx.import.update({
+      where: { id: importId },
+      data: {
+        subtotalGoodsUsd: result.subtotalGoodsUsd,
+        importTotalUsd: result.importTotalUsd,
+        totalNetWeightKg: result.totalNetWeightKg,
+        totalGrossWeightKg: result.totalGrossWeightKg,
+        totalQuantity: result.totalQuantity,
+        totalAdditionalExpenses: result.totalAdditionalExpenses,
+        totalInvestedUsd: result.totalInvestedUsd,
+      },
+    })
 
-  await prisma.costSnapshot.create({
-    data: {
-      importLotId,
-      version: currentVersion + 1,
-      baseUnitCost: result.baseUnitCost,
-      totalUnitCost: result.totalUnitCost,
-      adjustedRealUnitCost: result.adjustedRealUnitCost,
-      totalExpensesUsd: result.totalExpensesUsd,
-      totalInvestedUsd: result.totalInvestedUsd,
-      producedUnits: lot.production.producedUnits,
-      sellableUnits: result.sellableUnits,
-      reason,
-    },
+    const version = (current.snapshots[0]?.version ?? 0) + 1
+    const previousValues = current.snapshots[0]
+      ? {
+          totalInvestedUsd: Number(current.snapshots[0].totalInvestedUsd),
+          weightedSellableUnitCost: Number(current.snapshots[0].weightedSellableUnitCost),
+        }
+      : undefined
+
+    await tx.costSnapshot.create({
+      data: {
+        importId,
+        version,
+        reason,
+        previousValues,
+        newValues: {
+          totalInvestedUsd: result.totalInvestedUsd,
+          weightedSellableUnitCost: result.weightedSellableUnitCost,
+        },
+        subtotalGoodsUsd: result.subtotalGoodsUsd,
+        freightUsd: Number(current.freightUsd),
+        additionalExpensesUsd: result.totalAdditionalExpenses,
+        totalInvestedUsd: result.totalInvestedUsd,
+        totalItems: current.items.length,
+        totalProducedUnits: result.totalProducedUnits,
+        totalSellableUnits: result.totalSellableUnits,
+        totalTheoreticalKg: result.totalTheoreticalKg,
+        weightedSellableUnitCost: result.weightedSellableUnitCost,
+        itemSnapshots: {
+          create: result.items.map((item) => ({
+            importItemId: item.itemId,
+            itemCode: item.itemCode,
+            baseValueUsd: item.baseValueUsd,
+            freightAllocatedUsd: item.freightAllocatedUsd,
+            otherExpensesAllocatedUsd: item.otherExpensesAllocatedUsd,
+            totalAllocatedExpensesUsd: item.totalAllocatedExpensesUsd,
+            totalItemCostUsd: item.totalItemCostUsd,
+            costPerProducedUnitUsd: item.costPerProducedUnitUsd,
+            costPerSellableUnitUsd: item.costPerSellableUnitUsd,
+            costPerExportableKgUsd: item.costPerExportableKgUsd,
+            adjustedRealCostUsd: item.adjustedRealCostUsd,
+            finalWasteKg: item.finalWasteKg,
+            participationByValuePct: item.participationByValuePct,
+            participationByNetWeightPct: item.participationByNetWeightPct,
+            participationByGrossWeightPct: item.participationByGrossWeightPct,
+            participationByQuantityPct: item.participationByQuantityPct,
+          })),
+        },
+      },
+    })
   })
 }

@@ -14,7 +14,7 @@ export function Sidebar() {
         <div className="rounded-3xl bg-slate-950 p-5 text-white shadow-soft">
           <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Mini ERP</p>
           <h1 className="mt-2 text-2xl font-semibold">Control de Costos</h1>
-          <p className="mt-2 text-sm text-slate-300">Importación, gastos, producción y costo real por cobija.</p>
+          <p className="mt-2 text-sm text-slate-300">Importación multi-ítem, prorrateo, producción y costo real por producto.</p>
         </div>
         <nav className="mt-8 space-y-2">
           {items.map(({ href, label, icon: Icon }) => (

@@ -7,25 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum ImportLotStatus {
+enum ImportStatus {
   DRAFT
   ACTIVE
   CLOSED
 }
 
-enum ExpenseCategory {
-  TRANSPORTE_INTERNO
-  DESCARGUE
-  MANO_DE_OBRA
-  SERVICIOS_BASICOS
-  AGENCIA_ADUANA
-  NAVIERA
-  CONTECON
-  INSUMOS
-  DESPERDICIO
-  TRANSPORTE_EXPORTACION
-  CARGUE
-  OTROS
+enum ProrationMethod {
+  POR_VALOR
+  POR_PESO_NETO
+  POR_PESO_BRUTO
+  POR_CANTIDAD
+  MANUAL
 }
 
 enum PaymentStatus {
@@ -41,77 +34,200 @@ enum PaymentMethod {
   OTHER
 }
 
-model ImportLot {
-  id               String            @id @default(cuid())
-  lotCode          String            @unique
-  invoiceNumber    String
-  description      String
-  supplier         String
-  date             DateTime
-  invoiceValueUsd  Decimal           @db.Decimal(14, 2)
-  freightUsd       Decimal           @db.Decimal(14, 2)
-  importTotalUsd   Decimal           @db.Decimal(14, 2)
-  status           ImportLotStatus   @default(ACTIVE)
-  expenses         LotExpense[]
-  production       ProductionRecord?
-  costSnapshots    CostSnapshot[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-
-  @@index([date])
-  @@index([supplier])
-  @@index([lotCode])
+enum ExpenseCategory {
+  FLETE_INTERNACIONAL
+  TRANSPORTE_INTERNO
+  DESCARGUE
+  MANO_DE_OBRA
+  SERVICIOS_BASICOS
+  AGENCIA_ADUANA
+  NAVIERA
+  CONTECON
+  INSUMOS
+  DESPERDICIO
+  TRANSPORTE_EXPORTACION
+  CARGUE
+  OTROS
 }
 
-model LotExpense {
-  id                  String         @id @default(cuid())
-  importLotId         String
-  importLot           ImportLot      @relation(fields: [importLotId], references: [id], onDelete: Cascade)
+enum GramajeUnit {
+  GRAMOS
+  KG
+}
+
+model Import {
+  id                      String          @id @default(cuid())
+  code                    String          @unique
+  invoiceNumber           String
+  invoiceDate             DateTime
+  supplier                String
+  description             String?
+  currency                String          @default("USD")
+  freightUsd              Decimal         @default(0) @db.Decimal(14, 2)
+  freightProrationMethod  ProrationMethod @default(POR_VALOR)
+  notes                   String?
+  status                  ImportStatus    @default(ACTIVE)
+
+  subtotalGoodsUsd        Decimal         @default(0) @db.Decimal(14, 2)
+  importTotalUsd          Decimal         @default(0) @db.Decimal(14, 2)
+  totalNetWeightKg        Decimal         @default(0) @db.Decimal(14, 2)
+  totalGrossWeightKg      Decimal         @default(0) @db.Decimal(14, 2)
+  totalQuantity           Decimal         @default(0) @db.Decimal(14, 2)
+  totalAdditionalExpenses Decimal         @default(0) @db.Decimal(14, 2)
+  totalInvestedUsd        Decimal         @default(0) @db.Decimal(14, 2)
+
+  items                   ImportItem[]
+  expenses                ImportExpense[]
+  snapshots               CostSnapshot[]
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  @@index([invoiceDate])
+  @@index([supplier])
+  @@index([code])
+}
+
+model ImportItem {
+  id                      String                   @id @default(cuid())
+  importId                String
+  import                  Import                   @relation(fields: [importId], references: [id], onDelete: Cascade)
+  itemCode                String
+  description             String
+  quantity                Decimal                  @db.Decimal(14, 2)
+  unit                    String
+  unitPriceUsd            Decimal                  @db.Decimal(14, 6)
+  totalValueUsd           Decimal                  @db.Decimal(14, 2)
+  netWeightKg             Decimal                  @db.Decimal(14, 2)
+  grossWeightKg           Decimal                  @db.Decimal(14, 2)
+  notes                   String?
+
+  allocations             ImportExpenseAllocation[]
+  production              ItemProduction?
+  itemSnapshots           ItemCostSnapshot[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+
+  @@unique([importId, itemCode])
+  @@index([importId])
+}
+
+model ImportExpense {
+  id                  String                   @id @default(cuid())
+  importId            String
+  import              Import                   @relation(fields: [importId], references: [id], onDelete: Cascade)
   category            ExpenseCategory
   description         String
-  amountUsd           Decimal        @db.Decimal(14, 2)
+  amountUsd           Decimal                  @db.Decimal(14, 2)
   expenseDate         DateTime
   provider            String
-  paymentStatus       PaymentStatus  @default(PENDING)
+  paymentStatus       PaymentStatus            @default(PENDING)
   paymentMethod       PaymentMethod?
   paymentDate         DateTime?
   invoiceFileUrl      String?
   paymentProofFileUrl String?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  prorationMethod     ProrationMethod          @default(POR_VALOR)
+  allocations         ImportExpenseAllocation[]
+  attachmentId        String?
+  attachment          Attachment?              @relation(fields: [attachmentId], references: [id])
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
 
-  @@index([importLotId])
-  @@index([category])
+  @@index([importId])
   @@index([expenseDate])
 }
 
-model ProductionRecord {
-  id             String    @id @default(cuid())
-  importLotId    String    @unique
-  importLot      ImportLot @relation(fields: [importLotId], references: [id], onDelete: Cascade)
-  producedUnits  Int
-  defectiveUnits Int       @default(0)
-  sellableUnits  Int
-  notes          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+model ImportExpenseAllocation {
+  id              String        @id @default(cuid())
+  expenseId       String
+  expense         ImportExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  importItemId    String
+  importItem      ImportItem    @relation(fields: [importItemId], references: [id], onDelete: Cascade)
+  amountUsd       Decimal       @db.Decimal(14, 2)
+  allocationPct   Decimal       @db.Decimal(8, 6)
+  isManual        Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([expenseId, importItemId])
+  @@index([importItemId])
+}
+
+model ItemProduction {
+  id                           String      @id @default(cuid())
+  importItemId                 String      @unique
+  importItem                   ImportItem  @relation(fields: [importItemId], references: [id], onDelete: Cascade)
+  producedUnits                Int
+  defectiveUnits               Int         @default(0)
+  sellableUnits                Int
+  grammageValue                Decimal     @db.Decimal(14, 4)
+  grammageUnit                 GramajeUnit @default(KG)
+  grammageKg                   Decimal     @db.Decimal(14, 6)
+  unitsPerBundle               Int?
+  bundleCount                  Int?
+  estimatedUnitsByBundle       Int?
+  theoreticalExportWeightKg    Decimal     @db.Decimal(14, 4)
+  calculatedWasteKg            Decimal     @db.Decimal(14, 4)
+  manualWasteAdjustmentKg      Decimal     @default(0) @db.Decimal(14, 4)
+  wasteAdjustmentReason        String?
+  finalWasteKg                 Decimal     @db.Decimal(14, 4)
+  notes                        String?
+  createdAt                    DateTime    @default(now())
+  updatedAt                    DateTime    @updatedAt
 }
 
 model CostSnapshot {
-  id                   String    @id @default(cuid())
-  importLotId          String
-  importLot            ImportLot @relation(fields: [importLotId], references: [id], onDelete: Cascade)
-  version              Int
-  baseUnitCost         Decimal   @db.Decimal(14, 4)
-  totalUnitCost        Decimal   @db.Decimal(14, 4)
-  adjustedRealUnitCost Decimal   @db.Decimal(14, 4)
-  totalExpensesUsd     Decimal   @db.Decimal(14, 2)
-  totalInvestedUsd     Decimal   @db.Decimal(14, 2)
-  producedUnits        Int
-  sellableUnits        Int
-  reason               String?
-  createdAt            DateTime  @default(now())
+  id                      String             @id @default(cuid())
+  importId                String
+  import                  Import              @relation(fields: [importId], references: [id], onDelete: Cascade)
+  version                 Int
+  reason                  String?
+  previousValues          Json?
+  newValues               Json?
+  subtotalGoodsUsd        Decimal             @db.Decimal(14, 2)
+  freightUsd              Decimal             @db.Decimal(14, 2)
+  additionalExpensesUsd   Decimal             @db.Decimal(14, 2)
+  totalInvestedUsd        Decimal             @db.Decimal(14, 2)
+  totalItems              Int
+  totalProducedUnits      Int
+  totalSellableUnits      Int
+  totalTheoreticalKg      Decimal             @db.Decimal(14, 4)
+  weightedSellableUnitCost Decimal            @db.Decimal(14, 4)
+  itemSnapshots           ItemCostSnapshot[]
+  createdAt               DateTime            @default(now())
 
-  @@unique([importLotId, version])
-  @@index([importLotId])
+  @@unique([importId, version])
+  @@index([importId])
+}
+
+model ItemCostSnapshot {
+  id                          String       @id @default(cuid())
+  snapshotId                  String
+  snapshot                    CostSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  importItemId                String
+  importItem                  ImportItem   @relation(fields: [importItemId], references: [id], onDelete: Cascade)
+  itemCode                    String
+  baseValueUsd                Decimal      @db.Decimal(14, 2)
+  freightAllocatedUsd         Decimal      @db.Decimal(14, 2)
+  otherExpensesAllocatedUsd   Decimal      @db.Decimal(14, 2)
+  totalAllocatedExpensesUsd   Decimal      @db.Decimal(14, 2)
+  totalItemCostUsd            Decimal      @db.Decimal(14, 2)
+  costPerProducedUnitUsd      Decimal?     @db.Decimal(14, 4)
+  costPerSellableUnitUsd      Decimal?     @db.Decimal(14, 4)
+  costPerExportableKgUsd      Decimal?     @db.Decimal(14, 4)
+  adjustedRealCostUsd         Decimal?     @db.Decimal(14, 4)
+  finalWasteKg                Decimal?     @db.Decimal(14, 4)
+  participationByValuePct     Decimal      @db.Decimal(8, 6)
+  participationByNetWeightPct Decimal      @db.Decimal(8, 6)
+  participationByGrossWeightPct Decimal    @db.Decimal(8, 6)
+  participationByQuantityPct  Decimal      @db.Decimal(8, 6)
+}
+
+model Attachment {
+  id          String         @id @default(cuid())
+  fileName    String
+  fileUrl     String
+  mimeType    String?
+  sizeBytes   Int?
+  expenses    ImportExpense[]
+  createdAt   DateTime       @default(now())
 }
