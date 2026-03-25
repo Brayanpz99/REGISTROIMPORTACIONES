@@ -157,6 +157,88 @@ export default async function ImportacionDetallePage({ params }: { params: Promi
           },
         ]}
       />
+  const lastSnapshot = data.snapshots[0]
+  const byItem = new Map(lastSnapshot?.itemSnapshots.map((i) => [i.importItemId, i]) ?? [])
+  const deleteImport = deleteImportAction.bind(null, data.id)
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-500">Detalle de importación</p>
+          <h1 className="text-4xl font-semibold tracking-tight text-slate-950">{data.code}</h1>
+          <p className="mt-2 text-slate-500">Factura {data.invoiceNumber} · {data.supplier}</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Link href={`/importaciones/${data.id}/editar`} className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-50">Editar</Link>
+          <Link href={`/importaciones/${data.id}/gastos/nuevo`} className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-50">Agregar gasto</Link>
+          <Link href={`/importaciones/${data.id}/produccion`} className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800">Producción por ítem</Link>
+          <form action={deleteImport}><button className="rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white hover:bg-rose-700">Eliminar</button></form>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <Card title="Subtotal mercancía" value={formatUsd(Number(data.subtotalGoodsUsd))} subtitle={`Factura ${formatDate(data.invoiceDate)}`} />
+        <Card title="Flete internacional" value={formatUsd(Number(data.freightUsd))} subtitle={data.freightProrationMethod} />
+        <Card title="Total importación" value={formatUsd(Number(data.importTotalUsd))} subtitle="Mercancía + flete" />
+        <Card title="Gastos adicionales" value={formatUsd(Number(data.totalAdditionalExpenses))} subtitle={`${data.expenses.length} gastos`} />
+        <Card title="Total invertido" value={formatUsd(Number(data.totalInvestedUsd))} subtitle={`Peso neto ${Number(data.totalNetWeightKg).toFixed(2)} kg`} />
+      </div>
+
+      <section className="table-card">
+        <div className="border-b border-slate-200 px-6 py-5"><h2 className="text-xl font-semibold text-slate-950">Ítems importados</h2></div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-left text-slate-500"><tr>
+              <th className="px-6 py-4">Código</th><th className="px-6 py-4">Descripción</th><th className="px-6 py-4">Cantidad</th><th className="px-6 py-4">Precio</th><th className="px-6 py-4">Valor</th><th className="px-6 py-4">% Part.</th><th className="px-6 py-4">Costo total</th><th className="px-6 py-4">Costo/u conf.</th><th className="px-6 py-4">Costo/u vend.</th><th className="px-6 py-4">Costo/kg</th><th className="px-6 py-4">Desperdicio</th>
+            </tr></thead>
+            <tbody>
+              {data.items.map((item) => {
+                const snapshot = byItem.get(item.id)
+                return <tr key={item.id} className="border-t border-slate-100">
+                  <td className="px-6 py-4 font-semibold">{item.itemCode}</td>
+                  <td className="px-6 py-4">{item.description}</td>
+                  <td className="px-6 py-4">{Number(item.quantity).toFixed(2)} {item.unit}</td>
+                  <td className="px-6 py-4">{formatUsd(Number(item.unitPriceUsd))}</td>
+                  <td className="px-6 py-4">{formatUsd(Number(item.totalValueUsd))}</td>
+                  <td className="px-6 py-4">{snapshot ? pct(Number(snapshot.participationByValuePct)) : '-'}</td>
+                  <td className="px-6 py-4">{snapshot ? formatUsd(Number(snapshot.totalItemCostUsd)) : '-'}</td>
+                  <td className="px-6 py-4">{snapshot?.costPerProducedUnitUsd ? formatUsd(Number(snapshot.costPerProducedUnitUsd)) : 'Pendiente'}</td>
+                  <td className="px-6 py-4">{snapshot?.costPerSellableUnitUsd ? formatUsd(Number(snapshot.costPerSellableUnitUsd)) : 'Pendiente'}</td>
+                  <td className="px-6 py-4">{snapshot?.costPerExportableKgUsd ? formatUsd(Number(snapshot.costPerExportableKgUsd)) : 'Pendiente'}</td>
+                  <td className="px-6 py-4">{item.production ? `${Number(item.production.finalWasteKg).toFixed(2)} kg` : 'Pendiente'}</td>
+                </tr>
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="table-card">
+        <div className="border-b border-slate-200 px-6 py-5"><h2 className="text-xl font-semibold text-slate-950">Gastos y prorrateo</h2></div>
+        <div className="overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-6 py-4">Fecha</th><th className="px-6 py-4">Categoría</th><th className="px-6 py-4">Método</th><th className="px-6 py-4">Monto</th><th className="px-6 py-4">Estado</th><th className="px-6 py-4">Impacto</th><th className="px-6 py-4">Acciones</th></tr></thead><tbody>
+          {data.expenses.map((expense) => {
+            const remove = deleteExpenseAction.bind(null, data.id, expense.id)
+            return <tr key={expense.id} className="border-t border-slate-100">
+              <td className="px-6 py-4">{formatDate(expense.expenseDate)}</td><td className="px-6 py-4">{expense.category}</td><td className="px-6 py-4">{expense.prorationMethod}</td><td className="px-6 py-4">{formatUsd(Number(expense.amountUsd))}</td><td className="px-6 py-4">{expense.paymentStatus === 'PAID' ? 'Pagado' : 'Pendiente'}</td><td className="px-6 py-4">{expense.allocations.length} asignaciones</td>
+              <td className="px-6 py-4"><form action={remove}><button className="text-rose-600 hover:underline">Eliminar</button></form></td>
+            </tr>
+          })}
+        </tbody></table></div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+        <h2 className="text-xl font-semibold text-slate-950">Snapshots de costos</h2>
+        <div className="mt-4 space-y-3">
+          {data.snapshots.map((snapshot) => (
+            <div key={snapshot.id} className="rounded-2xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between"><p className="font-semibold">Versión {snapshot.version}</p><p className="text-xs text-slate-500">{formatDate(snapshot.createdAt)}</p></div>
+              <p className="text-sm text-slate-500">{snapshot.reason ?? 'Recálculo automático'}</p>
+              <p className="text-sm text-slate-500">Antes: {snapshot.previousValues ? JSON.stringify(snapshot.previousValues) : 'N/A'} | Después: {snapshot.newValues ? JSON.stringify(snapshot.newValues) : 'N/A'}</p>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }
