@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ImportLotStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+enum ExpenseCategory {
+  TRANSPORTE_INTERNO
+  DESCARGUE
+  MANO_DE_OBRA
+  SERVICIOS_BASICOS
+  AGENCIA_ADUANA
+  NAVIERA
+  CONTECON
+  INSUMOS
+  DESPERDICIO
+  TRANSPORTE_EXPORTACION
+  CARGUE
+  OTROS
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  CARD
+  CHECK
+  OTHER
+}
+
+model ImportLot {
+  id               String            @id @default(cuid())
+  lotCode          String            @unique
+  invoiceNumber    String
+  description      String
+  supplier         String
+  date             DateTime
+  invoiceValueUsd  Decimal           @db.Decimal(14, 2)
+  freightUsd       Decimal           @db.Decimal(14, 2)
+  importTotalUsd   Decimal           @db.Decimal(14, 2)
+  status           ImportLotStatus   @default(ACTIVE)
+  expenses         LotExpense[]
+  production       ProductionRecord?
+  costSnapshots    CostSnapshot[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([date])
+  @@index([supplier])
+  @@index([lotCode])
+}
+
+model LotExpense {
+  id                  String         @id @default(cuid())
+  importLotId         String
+  importLot           ImportLot      @relation(fields: [importLotId], references: [id], onDelete: Cascade)
+  category            ExpenseCategory
+  description         String
+  amountUsd           Decimal        @db.Decimal(14, 2)
+  expenseDate         DateTime
+  provider            String
+  paymentStatus       PaymentStatus  @default(PENDING)
+  paymentMethod       PaymentMethod?
+  paymentDate         DateTime?
+  invoiceFileUrl      String?
+  paymentProofFileUrl String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([importLotId])
+  @@index([category])
+  @@index([expenseDate])
+}
+
+model ProductionRecord {
+  id             String    @id @default(cuid())
+  importLotId    String    @unique
+  importLot      ImportLot @relation(fields: [importLotId], references: [id], onDelete: Cascade)
+  producedUnits  Int
+  defectiveUnits Int       @default(0)
+  sellableUnits  Int
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model CostSnapshot {
+  id                   String    @id @default(cuid())
+  importLotId          String
+  importLot            ImportLot @relation(fields: [importLotId], references: [id], onDelete: Cascade)
+  version              Int
+  baseUnitCost         Decimal   @db.Decimal(14, 4)
+  totalUnitCost        Decimal   @db.Decimal(14, 4)
+  adjustedRealUnitCost Decimal   @db.Decimal(14, 4)
+  totalExpensesUsd     Decimal   @db.Decimal(14, 2)
+  totalInvestedUsd     Decimal   @db.Decimal(14, 2)
+  producedUnits        Int
+  sellableUnits        Int
+  reason               String?
+  createdAt            DateTime  @default(now())
+
+  @@unique([importLotId, version])
+  @@index([importLotId])
+}
