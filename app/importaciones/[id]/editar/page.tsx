@@ -24,6 +24,18 @@ export default async function EditarImportacionPage({ params }: { params: Promis
           <div className="md:col-span-3"><label>Observaciones</label><textarea name="notes" rows={2} defaultValue={data.notes ?? ''} /></div>
         </div>
 
+        <div className="rounded-2xl border border-slate-200 p-4">
+          <h2 className="mb-3 text-lg font-semibold text-slate-950">Documentación aduanera y póliza</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div><label>Número de DAI</label><input name="daiNumber" defaultValue={data.daiNumber ?? ''} /></div>
+            <div><label>Fecha DAI</label><input name="daiDate" type="date" defaultValue={data.daiDate ? data.daiDate.toISOString().slice(0,10) : ''} /></div>
+            <div><label>Número de póliza</label><input name="insurancePolicyNumber" defaultValue={data.insurancePolicyNumber ?? ''} /></div>
+            <div><label>Aseguradora</label><input name="insuranceCompany" defaultValue={data.insuranceCompany ?? ''} /></div>
+            <div><label>Fecha de emisión póliza</label><input name="insuranceIssuedAt" type="date" defaultValue={data.insuranceIssuedAt ? data.insuranceIssuedAt.toISOString().slice(0,10) : ''} /></div>
+            <div><label>Fecha de vencimiento póliza</label><input name="insuranceExpiresAt" type="date" defaultValue={data.insuranceExpiresAt ? data.insuranceExpiresAt.toISOString().slice(0,10) : ''} /></div>
+          </div>
+        </div>
+
         <div className="grid gap-3">
           {[...data.items, { id: 'new-1', itemCode: '', description: '', quantity: 0, unit: 'METROS', unitPriceUsd: 0, netWeightKg: 0, grossWeightKg: 0, notes: '' }].map((item) => (
             <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-200 p-4 md:grid-cols-8">

@@ -6,6 +6,7 @@ import { CostTrendChart } from '@/components/charts/cost-trend-chart'
 import { AlertList } from '@/components/dashboard/alert-list'
 import { formatUsd } from '@/lib/utils/currency'
 import { formatDate } from '@/lib/utils/date'
+import { getInsurancePolicyState } from '@/lib/utils/insurance-policy'
 
 export default async function DashboardPage() {
   const imports = await prisma.import.findMany({
@@ -38,6 +39,8 @@ export default async function DashboardPage() {
     const defective = row.items.reduce((acc, item) => acc + (item.production?.defectiveUnits ?? 0), 0)
     const defectRate = produced > 0 ? defective / produced : 0
 
+    const policyState = getInsurancePolicyState(row.insuranceExpiresAt)
+
     return [
       !row.snapshots[0]
         ? { id: `${row.id}-snapshot`, title: `${row.code} sin snapshot`, description: 'Requiere recálculo para mostrar costo vendible.', severity: 'warning' as const }
@@ -48,7 +51,13 @@ export default async function DashboardPage() {
       defectRate > 0.05
         ? { id: `${row.id}-defect`, title: `${row.code} con merma alta`, description: `La tasa de defectuosos es ${(defectRate * 100).toFixed(2)}%.`, severity: 'warning' as const }
         : null,
-    ].filter(Boolean)
+      policyState.status === 'warning' && policyState.daysRemaining !== null
+        ? { id: `${row.id}-policy-warning`, title: `La póliza de ${row.code} vence en ${policyState.daysRemaining} días`, description: 'Revisar renovación para evitar vencimiento operativo.', severity: 'warning' as const }
+        : null,
+      policyState.status === 'expired'
+        ? { id: `${row.id}-policy-expired`, title: `La póliza de ${row.code} está vencida`, description: 'Se requiere actualización inmediata de póliza.', severity: 'warning' as const }
+        : null,
+    ].filter((alert): alert is NonNullable<typeof alert> => Boolean(alert))
   })
 
   return (
