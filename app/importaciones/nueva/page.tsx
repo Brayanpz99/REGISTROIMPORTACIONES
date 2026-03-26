@@ -22,6 +22,18 @@ export default function NuevaImportacionPage() {
           <div className="md:col-span-3"><label htmlFor="notes">Observaciones</label><textarea id="notes" name="notes" rows={2} /></div>
         </div>
 
+        <div className="rounded-2xl border border-slate-200 p-4">
+          <h2 className="mb-3 text-lg font-semibold text-slate-950">Documentación aduanera y póliza</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div><label htmlFor="daiNumber">Número de DAI</label><input id="daiNumber" name="daiNumber" /></div>
+            <div><label htmlFor="daiDate">Fecha DAI</label><input id="daiDate" name="daiDate" type="date" /></div>
+            <div><label htmlFor="insurancePolicyNumber">Número de póliza</label><input id="insurancePolicyNumber" name="insurancePolicyNumber" /></div>
+            <div><label htmlFor="insuranceCompany">Aseguradora</label><input id="insuranceCompany" name="insuranceCompany" /></div>
+            <div><label htmlFor="insuranceIssuedAt">Fecha de emisión póliza</label><input id="insuranceIssuedAt" name="insuranceIssuedAt" type="date" /></div>
+            <div><label htmlFor="insuranceExpiresAt">Fecha de vencimiento póliza</label><input id="insuranceExpiresAt" name="insuranceExpiresAt" type="date" /></div>
+          </div>
+        </div>
+
         <div>
           <h2 className="mb-3 text-lg font-semibold text-slate-950">Ítems de la factura</h2>
           <div className="grid gap-3">

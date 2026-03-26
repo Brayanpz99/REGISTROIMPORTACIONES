@@ -13,6 +13,16 @@ function parseNumber(value: FormDataEntryValue | null, fallback = 0) {
   return Number.isFinite(n) ? n : fallback
 }
 
+function parseOptionalText(value: FormDataEntryValue | null) {
+  const text = String(value || '').trim()
+  return text || null
+}
+
+function parseOptionalDate(value: FormDataEntryValue | null) {
+  const raw = String(value || '').trim()
+  return raw ? new Date(raw) : null
+}
+
 function allocationBase(item: { totalValueUsd: unknown; netWeightKg: unknown; grossWeightKg: unknown; quantity: unknown }, method: ProrationMethod) {
   if (method === 'POR_PESO_NETO') return Number(item.netWeightKg)
   if (method === 'POR_PESO_BRUTO') return Number(item.grossWeightKg)
@@ -71,8 +81,14 @@ export async function createImportAction(formData: FormData) {
   const invoiceNumber = String(formData.get('invoiceNumber') || '').trim()
   const supplier = String(formData.get('supplier') || '').trim()
   const invoiceDate = String(formData.get('invoiceDate') || '').trim()
-  const description = String(formData.get('description') || '').trim() || null
-  const notes = String(formData.get('notes') || '').trim() || null
+  const description = parseOptionalText(formData.get('description'))
+  const notes = parseOptionalText(formData.get('notes'))
+  const daiNumber = parseOptionalText(formData.get('daiNumber'))
+  const daiDate = parseOptionalDate(formData.get('daiDate'))
+  const insurancePolicyNumber = parseOptionalText(formData.get('insurancePolicyNumber'))
+  const insuranceCompany = parseOptionalText(formData.get('insuranceCompany'))
+  const insuranceIssuedAt = parseOptionalDate(formData.get('insuranceIssuedAt'))
+  const insuranceExpiresAt = parseOptionalDate(formData.get('insuranceExpiresAt'))
   const currency = String(formData.get('currency') || 'USD').trim()
   const freightUsd = parseNumber(formData.get('freightUsd'))
   const freightProrationMethod = String(formData.get('freightProrationMethod') || 'POR_VALOR') as ProrationMethod
@@ -93,6 +109,12 @@ export async function createImportAction(formData: FormData) {
       currency,
       freightUsd,
       freightProrationMethod,
+      daiNumber,
+      daiDate,
+      insurancePolicyNumber,
+      insuranceCompany,
+      insuranceIssuedAt,
+      insuranceExpiresAt,
       items: { create: items },
     },
   })
@@ -106,8 +128,14 @@ export async function updateImportAction(importId: string, formData: FormData) {
   const invoiceNumber = String(formData.get('invoiceNumber') || '').trim()
   const supplier = String(formData.get('supplier') || '').trim()
   const invoiceDate = String(formData.get('invoiceDate') || '').trim()
-  const description = String(formData.get('description') || '').trim() || null
-  const notes = String(formData.get('notes') || '').trim() || null
+  const description = parseOptionalText(formData.get('description'))
+  const notes = parseOptionalText(formData.get('notes'))
+  const daiNumber = parseOptionalText(formData.get('daiNumber'))
+  const daiDate = parseOptionalDate(formData.get('daiDate'))
+  const insurancePolicyNumber = parseOptionalText(formData.get('insurancePolicyNumber'))
+  const insuranceCompany = parseOptionalText(formData.get('insuranceCompany'))
+  const insuranceIssuedAt = parseOptionalDate(formData.get('insuranceIssuedAt'))
+  const insuranceExpiresAt = parseOptionalDate(formData.get('insuranceExpiresAt'))
   const currency = String(formData.get('currency') || 'USD').trim()
   const freightUsd = parseNumber(formData.get('freightUsd'))
   const freightProrationMethod = String(formData.get('freightProrationMethod') || 'POR_VALOR') as ProrationMethod
@@ -117,7 +145,22 @@ export async function updateImportAction(importId: string, formData: FormData) {
   await prisma.$transaction(async (tx) => {
     await tx.import.update({
       where: { id: importId },
-      data: { invoiceNumber, supplier, invoiceDate: new Date(invoiceDate), description, notes, currency, freightUsd, freightProrationMethod },
+      data: {
+        invoiceNumber,
+        supplier,
+        invoiceDate: new Date(invoiceDate),
+        description,
+        notes,
+        currency,
+        freightUsd,
+        freightProrationMethod,
+        daiNumber,
+        daiDate,
+        insurancePolicyNumber,
+        insuranceCompany,
+        insuranceIssuedAt,
+        insuranceExpiresAt,
+      },
     })
     await tx.importItem.deleteMany({ where: { importId } })
     await tx.importItem.createMany({ data: items.map((item) => ({ ...item, importId })) })

@@ -67,6 +67,12 @@ model Import {
   freightProrationMethod  ProrationMethod @default(POR_VALOR)
   notes                   String?
   status                  ImportStatus    @default(ACTIVE)
+  daiNumber               String?
+  daiDate                 DateTime?
+  insurancePolicyNumber   String?
+  insuranceCompany        String?
+  insuranceIssuedAt       DateTime?
+  insuranceExpiresAt      DateTime?
 
   subtotalGoodsUsd        Decimal         @default(0) @db.Decimal(14, 2)
   importTotalUsd          Decimal         @default(0) @db.Decimal(14, 2)
